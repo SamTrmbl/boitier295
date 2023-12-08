@@ -2,20 +2,18 @@
 #include <EEPROM.h>
 
 int addresse = 0;
-byte dataEEPROM;
+
 
 const int maxChar = 12; //incluant le null de terminaison, donc maxChar-1 lettres
 char nomRx[maxChar];   // le nom à recevoir à chaque RX
 
-int indexRx = 0;
-char charRx;
 
 boolean newData = false;
 boolean majPrint = true;
 
 
 
-//3 tags max, 16 colonnes car 4 octets pour UID, 12 octets pour nom (11 lettres max). 
+//??(1024/colonnes) tags max, 16 colonnes car 4 octets pour UID, 12 octets pour nom (11 lettres max). 
 //Ou faire une lettre de moins pour avoir un identifiants (0 = vide, après carte 1,2,3,4,).
 //Un Arduino neuf à une EEPROM remplie de 255, faire le sketch EEPROM_clear avant.
 
@@ -25,12 +23,6 @@ void setup() {
 
   Serial.begin(9600);
 
-  Serial.println("<Arduino is ready>");
-
-
-
-
- 
 }
 
 
@@ -44,6 +36,7 @@ void loop() {
     else{
       Serial.println("Voici les noms inscrits");
       Serial.println("");
+      //Cette section pourrait être améliorée
       for (int i=0; i < (int) EEPROM.length(); i += maxChar+1){//ajouter un + 4 quand il y aura les tags
         if(EEPROM.read(i) != 0){//Un nom est incrit
           Serial.print("Nom #");
@@ -70,30 +63,23 @@ void loop() {
     }
   }
 
-  
-  
+  if (Serial.available() > 0) {
+    //Les String() ont une fonction pour lire facilement un message du Serial Monitor
+    String incomingString = Serial.readStringUntil('\n'); 
 
-  
-    while (Serial.available() > 0 && newData == false) {//Un nom est inscrit.
-        charRx = Serial.read();
-        
-        
+    incomingString.trim(); //oter le whitespace
+    incomingString = incomingString.substring(0, maxChar-1); //Découper si trop long. -1 pour laisser la place pour \0
 
-        if (charRx != '\n') {          //newline est la fin du mot envoyé par le terminal
-            nomRx[indexRx] = charRx;
-            indexRx++;
-            if (indexRx >= maxChar) {  //Si on est rendu au maximum de longueur, on reste 
-                indexRx = maxChar - 1; // "sur place" en attendant de recevoir le \n
-            }
-        }
-        else {
-            nomRx[indexRx] = 0x0; // termine le string avec un null
-            indexRx = 0;
-            newData = true;
-        }
-    }
+    //Conversion du String en char array pour une meilleure intéraction avec le EEPROM
+    memset(nomRx, '\0', maxChar); //reset le char array, utile si le dernier nom est plus long que le prochain
+    incomingString.toCharArray(nomRx,maxChar);
+    newData = true; 
+  }
+
+
 
     if (newData == true) {
+       //Cette section pourrait être améliorée !!
         int newIndex = 0;
 
         for (int i=0; i < (int) EEPROM.length(); i += maxChar+1){//cherche le premier ID "nul" de 0
@@ -117,22 +103,12 @@ void loop() {
         Serial.println("");
 
 
+        //Inscrire les informations dans le EEPROM
+        //La méthode put() gère tous les types de données automatiquement, contrairement à write() qui ne gère que byte
+        addresse = newIndex*13;
+        EEPROM.put(addresse, newID);
+        EEPROM.put(addresse+1, nomRx); 
 
-        for (int i = 0; i < maxChar; i++){   
-          addresse = newIndex*13+i;      //Ajuster le plus 13 quand TAG
-          if (i==0){
-            EEPROM.write(addresse, newID); 
-          }
-          else{
-          EEPROM.write(addresse, nomRx[i-1]);
-          }
-
- 
-        }
- 
-        for (int i=0; i < maxChar; i++){//reset nomRX au cas où on nom soit plus court que le précédent
-          nomRx[i]='\0';
-        }
 
         newData = false;
         majPrint=true;
